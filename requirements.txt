@@ -1,0 +1,1 @@
+# Por enquanto, o projeto usa apenas a standard library do Python.
