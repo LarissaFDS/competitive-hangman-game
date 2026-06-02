@@ -1,7 +1,13 @@
 import socket
 import threading
-import json
 import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.protocol import send_msg
 
 #Configurações camada de transporte e rede
 HOST = "localhost" #Interface de loopback (127.0.0.1).
@@ -51,9 +57,7 @@ def main():
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.
-    join_msg = {"type": "JOIN", "payload": player_name}
-    
-    client_socket.sendall(json.dumps(join_msg).encode("utf-8"))
+    send_msg(client_socket, "JOIN", player_name)
     
     #cria uma thread separada para lidar com a recepção bloqueante do socket
     recv_thread = threading.Thread(target=recv_loop, args=(client_socket,), daemon=True)
@@ -68,12 +72,12 @@ def main():
             
             #Regras do protocolo de aplicação para definir o "type" do payload
             if len(user_input) == 1:
-                msg = {"type": "GUESS_LETTER", "payload": user_input}
+                msg_type = "GUESS_LETTER"
             else:
-                msg = {"type": "GUESS_WORD", "payload": user_input}
+                msg_type = "GUESS_WORD"
                 
-            #Empacota em JSON, converte para bytes e envia pelo túnel TCP estabelecido.
-            client_socket.sendall(json.dumps(msg).encode("utf-8"))
+            #Empacota em JSON com framing por linha e envia pelo túnel TCP.
+            send_msg(client_socket, msg_type, user_input)
             
     except KeyboardInterrupt:
         print("\nSaindo do jogo...")
