@@ -1,29 +1,37 @@
 import socket
 import threading
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.protocol import recv_msgs
 
 
 HOST = "localhost"
 PORT = 5000
-BUFFER_SIZE = 1024
 
 
 def handle_client(client_socket, client_address):
     """Atende um cliente conectado em uma thread separada."""
     print(f"Cliente conectado: {client_address}")
 
+    recv_buffer = [""]
+
     try:
         while True:
-            message = client_socket.recv(BUFFER_SIZE)
-
-            if not message:
+            messages = recv_msgs(client_socket, recv_buffer)
+            if not messages:
                 print(f"Cliente encerrou a conexao: {client_address}")
                 break
 
-            decoded_message = message.decode("utf-8")
-            print(f"Mensagem recebida de {client_address}: {decoded_message}")
+            for msg in messages:
+                print(f"Mensagem recebida de {client_address}: {msg}")
 
-            response = "Mensagem recebida pelo servidor"
-            client_socket.sendall(response.encode("utf-8"))
+                response = "Mensagem recebida pelo servidor"
+                client_socket.sendall(response.encode("utf-8"))
     except ConnectionResetError:
         print(f"Cliente desconectou inesperadamente: {client_address}")
     finally:
