@@ -2,15 +2,17 @@ import json
 
 class LocalGameState:
     def __init__(self):
+        self.my_id = None #Necessário para comparar quem errou ou quem foi eliminado
         self.phase = "WAITING"
         self.revealed = ""
         self.my_attempts = []
-        self.scores = {}
+        self.all_players = [] #Lista de dicionários com nome, tentativas restantes e pontuação
+        self.is_spectator = False
 
     def update(self, msg):
-        #atualiza o estado local do jogo com base no dicionário ou JSON recebido.
+        #Atualiza o estado local do jogo com base na mensagem recebida.
         try:
-            #grante que a mensagem seja um dicionário, fazendo o parse caso chegue como string
+            #Garante que a mensagem seja um dicionário
             if isinstance(msg, str):
                 data = json.loads(msg)
             else:
@@ -19,14 +21,43 @@ class LocalGameState:
             msg_type = data.get("type")
             payload = data.get("payload", {})
 
-            #atualiza os dados apenas se a mensagem for um update de estado
-            if msg_type == "STATE_UPDATE":
-                self.phase = payload.get("phase", self.phase)
-                self.revealed = payload.get("revealed", self.revealed)
-                self.my_attempts = payload.get("my_attempts", self.my_attempts)
-                self.scores = payload.get("scores", self.scores)
+            #Dispatcher: mapeia o tipo de mensagem para o método privado correspondente
+            dispatch_map = {
+                "GAME_START": self._on_game_start,
+                "STATE_UPDATE": self._on_state_update,
+                "WRONG_GUESS": self._on_wrong_guess,
+                "PLAYER_OUT": self._on_player_out,
+            }
+
+            if msg_type in dispatch_map:
+                dispatch_map[msg_type](payload)
+            else:
+                #Ignora silenciosamente ou loga tipos de mensagens não mapeados
+                pass
                 
         except json.JSONDecodeError:
-            print("Erro ao decodificar a mensagem de atualização de estado.")
+            print("\nErro ao decodificar a mensagem JSON do servidor.")
         except Exception as e:
-            print(f"Erro ao processar o estado local: {e}")
+            print(f"\nErro ao processar o estado local: {e}")
+
+    #--- Metodos de tratamento de estado ---
+    def _on_game_start(self, payload):
+        self.my_id = payload.get("your_id", self.my_id)
+        self.phase = "PLAYING"
+
+    def _on_state_update(self, payload):
+        self.phase = payload.get("phase", self.phase)
+        self.revealed = payload.get("revealed", self.revealed)
+        self.all_players = payload.get("all_players", self.all_players)
+
+    def _on_wrong_guess(self, payload):
+        #Atualiza my_attempts apenas se o erro foi do próprio jogador
+        if payload.get("player_id") == self.my_id:
+            guess = payload.get("guess")
+            if guess and guess not in self.my_attempts:
+                self.my_attempts.append(guess)
+
+    def _on_player_out(self, payload):
+        #Define como espectador se o eliminado for o próprio jogador
+        if payload.get("player_id") == self.my_id:
+            self.is_spectator = True

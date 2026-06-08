@@ -3,6 +3,15 @@ import threading
 import json
 import sys
 
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.protocol import send_msg
+from local_state import LocalGameState
+
 #Configurações camada de transporte e rede
 HOST = "localhost" #Interface de loopback (127.0.0.1).
 PORT = 5000        #Porta de destino na camada de transporte. 
@@ -20,7 +29,11 @@ def recv_loop(sock):
             if not data:
                 print("\nConexão encerrada pelo servidor (TCP FIN recebido).")
                 break
-            
+
+            #Decodifica e envia a string JSON para a fonte de verdade (LocalGameState)
+            msg_str = data.decode('utf-8')
+            state.update(msg_str)
+
             #decodifica os bytes recebidos da rede (camada física/transporte) de volta para string (camada de aplicação) usando UTF-8.
             print(f"\n[Servidor]: {data.decode('utf-8')}")
             print("> ", end="", flush=True)
@@ -36,7 +49,7 @@ def recv_loop(sock):
 
 def main():
     player_name = input("Digite seu nome de jogador: ")
-    
+    state = LocalGameState()
     #criação do socket:
     #AF_INET: define a família de endereçamento como IPv4 (camada de rede).
     #SOCK_STREAM: define o uso do protocolo TCP.
@@ -51,9 +64,7 @@ def main():
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.
-    join_msg = {"type": "JOIN", "payload": player_name}
-    
-    client_socket.sendall(json.dumps(join_msg).encode("utf-8"))
+    send_msg(client_socket, "JOIN", player_name)
     
     #cria uma thread separada para lidar com a recepção bloqueante do socket
     recv_thread = threading.Thread(target=recv_loop, args=(client_socket,), daemon=True)
@@ -63,17 +74,26 @@ def main():
     try:
         while True:
             user_input = input("> ").strip()
+
+            if state.is_spectator:
+                print("[Você é espectador]")
+                continue
+
             if not user_input:
                 continue
             
+            if not user_input.isalpha():
+                print("Aviso: apenas letras (A-Z) são permitidas.")
+                continue
+
             #Regras do protocolo de aplicação para definir o "type" do payload
             if len(user_input) == 1:
-                msg = {"type": "GUESS_LETTER", "payload": user_input}
+                msg_type = "GUESS_LETTER"
             else:
-                msg = {"type": "GUESS_WORD", "payload": user_input}
+                msg_type = "GUESS_WORD"
                 
-            #Empacota em JSON, converte para bytes e envia pelo túnel TCP estabelecido.
-            client_socket.sendall(json.dumps(msg).encode("utf-8"))
+            #envia para o servidor.
+            send_msg(client_socket, msg_type, user_input.upper())
             
     except KeyboardInterrupt:
         print("\nSaindo do jogo...")
