@@ -1,61 +1,105 @@
 import socket
+import sys
 import threading
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.protocol import recv_msgs, send_msg
 
 HOST = "localhost"
 PORT = 5000
-BUFFER_SIZE = 1024
+MAX_CLIENTS = 3
+
+clients: dict[int, socket.socket] = {}
+clients_lock = threading.Lock()
+next_player_id = 1
 
 
-def handle_client(client_socket, client_address):
-    """Atende um cliente conectado em uma thread separada."""
-    print(f"Cliente conectado: {client_address}")
+def handle_client(conn: socket.socket, addr, player_id: int) -> None:
+    """Atende um cliente em thread dedicada."""
+    recv_buffer = [""]
 
     try:
         while True:
-            message = client_socket.recv(BUFFER_SIZE)
-
-            if not message:
-                print(f"Cliente encerrou a conexao: {client_address}")
+            messages = recv_msgs(conn, recv_buffer)
+            if not messages:
                 break
 
-            decoded_message = message.decode("utf-8")
-            print(f"Mensagem recebida de {client_address}: {decoded_message}")
+            for msg in messages:
+                msg_type = msg.get("type")
+                payload = msg.get("payload")
 
-            response = "Mensagem recebida pelo servidor"
-            client_socket.sendall(response.encode("utf-8"))
-    except ConnectionResetError:
-        print(f"Cliente desconectou inesperadamente: {client_address}")
+                if msg_type == "JOIN":
+                    player_name = payload if isinstance(payload, str) else str(payload)
+                    with clients_lock:
+                        player_count = len(clients)
+
+                    print(f"[JOIN] Jogador {player_id} ({player_name}) entrou")
+                    send_msg(
+                        conn,
+                        "WELCOME",
+                        {"player_id": player_id, "player_count": player_count},
+                    )
+    except (ConnectionResetError, OSError):
+        pass
     finally:
-        client_socket.close()
-        print(f"Conexao encerrada: {client_address}")
+        with clients_lock:
+            clients.pop(player_id, None)
+
+        try:
+            conn.close()
+        except OSError:
+            pass
+        print(f"[-] Jogador {player_id} desconectado")
 
 
-def start_server():
-    """Inicia o servidor TCP."""
-    # O socket TCP abre um ponto de comunicacao na rede.
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.bind((HOST, PORT))
-    server_socket.listen()
+def accept_loop(server_sock: socket.socket) -> None:
+    """Loop principal de aceitação de conexões."""
+    global next_player_id
 
+    while True:
+        conn, addr = server_sock.accept()
+
+        with clients_lock:
+            if len(clients) >= MAX_CLIENTS:
+                send_msg(
+                    conn,
+                    "ERROR",
+                    {"message": "Servidor lotado. Limite de 3 jogadores."},
+                )
+                conn.close()
+                continue
+
+            player_id = next_player_id
+            next_player_id += 1
+            clients[player_id] = conn
+
+        print(f"[+] Jogador {player_id} conectado")
+        client_thread = threading.Thread(
+            target=handle_client,
+            args=(conn, addr, player_id),
+            daemon=True,
+        )
+        client_thread.start()
+
+
+def main() -> None:
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_sock.bind((HOST, PORT))
+    server_sock.listen()
     print(f"Servidor escutando em {HOST}:{PORT}")
 
     try:
-        while True:
-            client_socket, client_address = server_socket.accept()
-
-            # Cada thread permite atender um cliente sem bloquear os demais.
-            client_thread = threading.Thread(
-                target=handle_client,
-                args=(client_socket, client_address),
-            )
-            client_thread.start()
+        accept_loop(server_sock)
     except KeyboardInterrupt:
         print("\nServidor encerrado manualmente.")
     finally:
-        server_socket.close()
+        server_sock.close()
 
 
 if __name__ == "__main__":
-    start_server()
+    main()

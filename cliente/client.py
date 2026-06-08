@@ -1,8 +1,6 @@
 import socket
 import threading
-import json
 import sys
-
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +15,7 @@ HOST = "localhost" #Interface de loopback (127.0.0.1).
 PORT = 5000        #Porta de destino na camada de transporte. 
 BUFFER_SIZE = 1024 #Tamanho do buffer de recepção na camada de aplicação (em bytes).
 
-def recv_loop(sock):
+def recv_loop(sock, state):
     #comportamento full-duplex da aplicação (envia e recebe simultaneamente).
     try:
         while True:
@@ -67,7 +65,7 @@ def main():
     send_msg(client_socket, "JOIN", player_name)
     
     #cria uma thread separada para lidar com a recepção bloqueante do socket
-    recv_thread = threading.Thread(target=recv_loop, args=(client_socket,), daemon=True)
+    recv_thread = threading.Thread(target=recv_loop, args=(client_socket, state), daemon=True)
     recv_thread.start()
 
     #Loop principal (thread principal) focado apenas em I/O do usuário e envio (upload)
