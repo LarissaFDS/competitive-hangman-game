@@ -1,3 +1,4 @@
+import json
 import socket
 import threading
 import sys
@@ -7,34 +8,39 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.protocol import send_msg
+from utils.protocol import send_msg, recv_msgs
 from local_state import LocalGameState
 
 #Configurações camada de transporte e rede
 HOST = "localhost" #Interface de loopback (127.0.0.1).
-PORT = 5000        #Porta de destino na camada de transporte. 
-BUFFER_SIZE = 1024 #Tamanho do buffer de recepção na camada de aplicação (em bytes).
+PORT = 5000        #Porta de destino na camada de transporte.
 
 def recv_loop(sock, state):
     #comportamento full-duplex da aplicação (envia e recebe simultaneamente).
+    
+    #Buffer acumulador de fragmentos TCP — mesma abordagem usada no servidor.
+    #recv_msgs() acumula chunks parciais e só retorna mensagens quando o delimitador '\n' é encontrado,
+    #evitando que JSONs fragmentados sejam entregues incompletos ao LocalGameState.
+    recv_buffer = [""]
+
     try:
         while True:
-            #sock.recv() é uma chamada bloqueante (blocking I/O). 
-            #A thread fica ociosa aqui até que o SO entregue dados vindos da rede.
-            data = sock.recv(BUFFER_SIZE)
-            
-            #se recv() retornar vazio (0 bytes), significa que o servidor enviou um pacote TCP FIN (encerramento gracioso da conexão).
-            if not data:
+            #recv_msgs() é bloqueante: a thread fica ociosa até o SO entregar dados.
+            #Retorna lista vazia quando o servidor envia TCP FIN (conexão encerrada).
+            messages = recv_msgs(sock, recv_buffer)
+
+            if not messages:
                 print("\nConexão encerrada pelo servidor (TCP FIN recebido).")
                 break
 
-            #Decodifica e envia a string JSON para a fonte de verdade (LocalGameState)
-            msg_str = data.decode('utf-8')
-            state.update(msg_str)
+            for msg in messages:
+                msg_str = json.dumps(msg)
 
-            #decodifica os bytes recebidos da rede (camada física/transporte) de volta para string (camada de aplicação) usando UTF-8.
-            print(f"\n[Servidor]: {data.decode('utf-8')}")
-            print("> ", end="", flush=True)
+                #Atualiza a fonte de verdade com a mensagem já montada e validada.
+                state.update(msg_str)
+
+                print(f"\n[Servidor]: {msg_str}")
+                print("> ", end="", flush=True)
             
     except ConnectionResetError:
         #captura o recebimento de um pacote TCP RST (reset). 
