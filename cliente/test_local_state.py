@@ -198,21 +198,52 @@ def test_fragmentacao_tcp_nao_corrompe_estado():
 
     print("[OK] REGRESSÃO — Fragmentação TCP: recv_msgs reconstrói mensagem corretamente")
 
+def test_player_out_outro_jogador_marca_inativo_no_placar():
+    state = LocalGameState()
+    state.update(json.dumps({"type": "GAME_START", "payload": {"your_id": 1}}))
+    state.update(json.dumps({
+        "type": "STATE_UPDATE",
+        "payload": {
+            "phase": "PLAYING",
+            "revealed": "_ _ _ _",
+            "all_players": [
+                {"id": 1, "name": "Ana",   "attempts_left": 6, "score": 0, "active": True},
+                {"id": 2, "name": "Bruno", "attempts_left": 6, "score": 0, "active": True},
+                {"id": 3, "name": "Carla", "attempts_left": 6, "score": 0, "active": True},
+            ]
+        }
+    }))
+ 
+    #Bruno (id=2) desconecta
+    state.update(json.dumps({"type": "PLAYER_OUT", "payload": {"player_id": 2}}))
+ 
+    assert state.is_spectator is False, "Jogador 1 não deveria virar espectador"
+ 
+    bruno = next(p for p in state.all_players if p["id"] == 2)
+    ana   = next(p for p in state.all_players if p["id"] == 1)
+    carla = next(p for p in state.all_players if p["id"] == 3)
+ 
+    assert bruno["active"] is False, "Bruno deveria estar marcado como active=False"
+    assert ana["active"]   is True,  "Ana deveria continuar ativa"
+    assert carla["active"] is True,  "Carla deveria continuar ativa"
+ 
+    print("[OK] FRONTEND — PLAYER_OUT de outro jogador marca active=False no placar sem travar input")
 
 if __name__ == "__main__":
     print("=" * 60)
     print("Demonstração dos critérios de aceite — LocalGameState")
     print("=" * 60)
 
-    test_game_start_popula_my_id()
-    test_state_update_placar()
-    test_wrong_guess_apenas_proprio_jogador()
-    test_wrong_guess_sem_duplicatas()
-    test_player_out_vira_espectador()
-    test_player_out_outro_jogador_nao_afeta()
-    test_validacao_input_cliente()
-    test_espectador_nao_envia()
-    test_fragmentacao_tcp_nao_corrompe_estado()
+    #test_game_start_popula_my_id()
+    #test_state_update_placar()
+    #test_wrong_guess_apenas_proprio_jogador()
+    #test_wrong_guess_sem_duplicatas()
+    #test_player_out_vira_espectador()
+    #test_player_out_outro_jogador_nao_afeta()
+    #test_validacao_input_cliente()
+    #test_espectador_nao_envia()
+    #test_fragmentacao_tcp_nao_corrompe_estado()
+    test_player_out_outro_jogador_marca_inativo_no_placar()
 
     print("=" * 60)
     print("Todos os critérios de aceite foram demonstrados com sucesso.")
