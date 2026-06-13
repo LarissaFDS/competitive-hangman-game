@@ -58,6 +58,14 @@ class LocalGameState:
                 self.my_attempts.append(guess)
 
     def _on_player_out(self, payload):
+
+        eliminated_id = payload.get("player_id")
         #Define como espectador se o eliminado for o próprio jogador
-        if payload.get("player_id") == self.my_id:
+        if  eliminated_id== self.my_id:
             self.is_spectator = True
+
+        #Permite que o renderer exiba o estado atualizado sem esperar pelo próximo STATE_UPDATE.
+        for player in self.all_players:
+            if player.get("id") == eliminated_id:
+                player["active"] = False
+                break

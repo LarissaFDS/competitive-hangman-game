@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from utils.protocol import send_msg, recv_msgs
 from local_state import LocalGameState
+from interface.renderer import render_state, render_waiting, render_game_over
 
 #Configurações camada de transporte e rede
 HOST = "localhost" #Interface de loopback (127.0.0.1).
@@ -17,7 +18,6 @@ PORT = 5000        #Porta de destino na camada de transporte.
 
 def recv_loop(sock, state):
     #comportamento full-duplex da aplicação (envia e recebe simultaneamente).
-    
     #Buffer acumulador de fragmentos TCP — mesma abordagem usada no servidor.
     #recv_msgs() acumula chunks parciais e só retorna mensagens quando o delimitador '\n' é encontrado,
     #evitando que JSONs fragmentados sejam entregues incompletos ao LocalGameState.
@@ -34,16 +34,36 @@ def recv_loop(sock, state):
                 break
 
             for msg in messages:
-                msg_str = json.dumps(msg)
+                msg_type = msg.get("type")
 
                 #Atualiza a fonte de verdade com a mensagem já montada e validada.
-                state.update(msg_str)
+                state.update(json.dumps(msg))
 
-                print(f"\n[Servidor]: {msg_str}")
+                #Renderiza a tela sempre que o estado mudar — exceto mensagens de
+                #controle que não alteram a tela principal (ex: WELCOME, ERROR).
+                if msg_type in ("GAME_START", "STATE_UPDATE", "WRONG_GUESS",
+                                "CORRECT_GUESS", "PLAYER_OUT"):
+                    render_state(state)
+
+                elif msg_type == "WAITING":
+                    payload = msg.get("payload", {})
+                    render_waiting(
+                        payload.get("connected", 0),
+                        payload.get("needed", 3),
+                    )
+
+                elif msg_type == "GAME_OVER":
+                    payload = msg.get("payload", {})
+                    render_game_over(
+                        winner_name=payload.get("winner_name"),
+                        word=payload.get("word", "?"),
+                        scores=payload.get("scores", []),
+                    )
+
                 print("> ", end="", flush=True)
-            
+
     except ConnectionResetError:
-        #captura o recebimento de um pacote TCP RST (reset). 
+        #captura o recebimento de um pacote TCP RST (reset).
         print("\nAviso: o servidor foi desconectado inesperadamente (TCP RST recebido).")
     except Exception as e:
         print(f"\nErro inesperado no cliente: {e}")
@@ -58,18 +78,15 @@ def main():
     #AF_INET: define a família de endereçamento como IPv4 (camada de rede).
     #SOCK_STREAM: define o uso do protocolo TCP.
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
     try:
         #onicia o "3-way handshake" do TCP (SYN, SYN-ACK, ACK) com o servidor.
         client_socket.connect((HOST, PORT))
     except ConnectionRefusedError:
-        #falha no handshake.
         print("Não foi possível conectar. O servidor está rodando na porta 5000?")
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.
     send_msg(client_socket, "JOIN", player_name)
-    
     #cria uma thread separada para lidar com a recepção bloqueante do socket
     recv_thread = threading.Thread(target=recv_loop, args=(client_socket, state), daemon=True)
     recv_thread.start()
@@ -85,7 +102,6 @@ def main():
 
             if not user_input:
                 continue
-            
             if not user_input.isalpha():
                 print("Aviso: apenas letras (A-Z) são permitidas.")
                 continue
@@ -95,10 +111,8 @@ def main():
                 msg_type = "GUESS_LETTER"
             else:
                 msg_type = "GUESS_WORD"
-                
             #envia para o servidor.
             send_msg(client_socket, msg_type, user_input.upper())
-            
     except KeyboardInterrupt:
         print("\nSaindo do jogo...")
     finally:
