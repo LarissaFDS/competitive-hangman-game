@@ -89,6 +89,9 @@ def render_state(state) -> None:
     
     print(f"  Categoria: {categoria}")
     print(f"  Palavra: {revealed}")
+    status_message = getattr(state, "status_message", "")
+    if status_message:
+        print(f"  {status_message}")
     print()
 
     if state.my_attempts:
@@ -135,3 +138,5 @@ def render_game_over(winner_name: str, word: str, scores: list[dict]) -> None:
         print(f"║    {name:<18} — {score:>4} pts      ║")
 
     print("╚══════════════════════════════════════╝")
+    print()
+    print("Pressione ENTER para jogar novamente")
