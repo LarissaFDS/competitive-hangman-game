@@ -10,13 +10,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.protocol import recv_msgs, send_msg
 from servidor.game_state import GameState
 from servidor.word_manager import load_words, pick_word
-
+import time
 HOST = "localhost"
 PORT = 5000
 MIN_PLAYERS = 2
 MAX_CLIENTS = 3
 
 WORDS_PATH = PROJECT_ROOT / "assets" / "palavras.txt"
+available_words = []
 
 #Estado global da partida — compartilhado entre todas as threads.
 game_state = GameState()
@@ -28,6 +29,9 @@ def _broadcast_state() -> None:
 
 
 def _broadcast_game_over() -> None:
+    import random
+    import time
+
     winner = game_state.determine_winner()
     payload = {
         "winner_id":   winner["id"]   if winner else None,
@@ -37,10 +41,33 @@ def _broadcast_game_over() -> None:
     }
     game_state.broadcast("GAME_OVER", payload)
 
-    #Reseta o estado e avisa os clientes para aguardarem nova partida.
-    game_state.reset()
-    game_state.broadcast("WAITING", {"connected": 0, "needed": MIN_PLAYERS})
+    time.sleep(6)
 
+    connected_count = len(game_state.sockets)
+    words_ran_out = len(available_words) == 0
+    all_spectators = all(p.is_spectator for p in game_state.players.values())
+
+    if connected_count <= 1 or words_ran_out or all_spectators:
+        print(f"[RESET] Condição atingida. Conectados: {connected_count}, sem palavras: {words_ran_out}, todos espectadores: {all_spectators}")
+        
+        game_state.reset()
+        game_state.broadcast("WAITING", {
+            "connected": len(game_state.sockets), 
+            "needed": MIN_PLAYERS
+        })
+    else:
+        word_tuple = random.choice(available_words)
+        available_words.remove(word_tuple)
+        word, category = word_tuple
+
+        game_state.start_game(word, category, reset_scores=False)
+
+        game_state.broadcast("GAME_START", {
+            "category":    category,
+            "word_length": len(word),
+        })
+        _broadcast_state()
+        print(f"[GAME] Próximo round iniciado! Palavra: {word} ({category})")
 
 def _handle_guess(player_id: int, letter: str) -> None:
     result = game_state.process_guess(player_id, letter)

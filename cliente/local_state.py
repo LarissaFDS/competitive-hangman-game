@@ -5,6 +5,7 @@ class LocalGameState:
         self.my_id = None #Necessário para comparar quem errou ou quem foi eliminado
         self.phase = "WAITING"
         self.revealed = ""
+        self.category = ""
         self.my_attempts = []
         self.all_players = [] #Lista de dicionários com nome, tentativas restantes e pontuação
         self.is_spectator = False
@@ -44,6 +45,9 @@ class LocalGameState:
     def _on_game_start(self, payload):
         self.my_id = payload.get("your_id", self.my_id)
         self.phase = "PLAYING"
+        self.my_attempts = []    
+        self.is_spectator = False
+        self.category = payload.get("category", self.category)
 
     def _on_state_update(self, payload):
         self.phase = payload.get("phase", self.phase)

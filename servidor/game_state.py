@@ -75,7 +75,7 @@ class GameState:
 
             return None
 
-    def start_game(self, word: str, category: str) -> None:
+    def start_game(self, word: str, category: str, reset_scores: bool = True) -> None:
         with self.lock:
             self.phase = PLAYING
             self.word = self._normalize_word(word)
@@ -84,7 +84,8 @@ class GameState:
             self.guessed_letters = set()
             for player in self.players.values():
                 player.attempts = DEFAULT_ATTEMPTS
-                player.score = 0
+                if reset_scores:
+                    player.score = 0
                 player.is_spectator = False
                 player.correct_unique_letters = set()
 
@@ -95,7 +96,11 @@ class GameState:
             self.category = ""
             self.revealed = []
             self.guessed_letters = set()
-            self.players = {}
+            for player in self.players.values():
+                player.score = 0
+                player.attempts = DEFAULT_ATTEMPTS
+                player.is_spectator = False
+                player.correct_unique_letters = set()
 
     def process_guess(self, player_id: int, letter: str) -> dict[str, Any]:
         with self.lock:

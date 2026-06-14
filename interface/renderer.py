@@ -1,10 +1,5 @@
 import os
 from pathlib import Path
-# import json
-# import time
-# import sys
-# sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-# from cliente.local_state import LocalGameState
 
 #Carregamento dos estágios da forca
 def _load_gallows(path: Path) -> list[str]:
@@ -89,7 +84,10 @@ def render_state(state) -> None:
     print("────────────────────────────────────")
     print()
 
+    categoria = getattr(state, "category", "Desconhecida")
     revealed = _format_revealed(state.revealed) if state.revealed else "?"
+    
+    print(f"  Categoria: {categoria}")
     print(f"  Palavra: {revealed}")
     print()
 
@@ -137,73 +135,3 @@ def render_game_over(winner_name: str, word: str, scores: list[dict]) -> None:
         print(f"║    {name:<18} — {score:>4} pts      ║")
 
     print("╚══════════════════════════════════════╝")
-
-
-# if __name__ == "__main__":
-
-#     sys.path.insert(0, str(Path(__file__).resolve().parent))
- 
-#     def pausa(msg=""):
-#         input(f"\n  [{msg}] — pressione Enter para continuar...")
- 
-#     render_waiting(connected=1, needed=3)
-#     pausa("sala de espera com 1/3 jogadores")
- 
-#     render_waiting(connected=2, needed=3)
-#     pausa("sala de espera com 2/3 jogadores")
- 
-#     state = LocalGameState()
-#     state.update(json.dumps({"type": "GAME_START", "payload": {"your_id": 1}}))
-#     state.update(json.dumps({
-#         "type": "STATE_UPDATE",
-#         "payload": {
-#             "phase": "PLAYING",
-#             "revealed": "_ _ _ _ _ _ _ _",
-#             "all_players": [
-#                 {"id": 1, "name": "Você",  "attempts_left": 6, "score": 0,  "active": True},
-#                 {"id": 2, "name": "Bruno", "attempts_left": 6, "score": 0,  "active": True},
-#                 {"id": 3, "name": "Carla", "attempts_left": 6, "score": 0,  "active": True},
-#             ]
-#         }
-#     }))
-#     render_state(state)
-#     pausa("início — nenhum erro ainda (estágio 0)")
- 
-#     for letra in ["Z", "X"]:
-#         state.update(json.dumps({"type": "WRONG_GUESS", "payload": {"player_id": 1, "guess": letra}}))
-#     render_state(state)
-#     pausa("2 erros (estágio 2)")
- 
-#     state.update(json.dumps({
-#         "type": "STATE_UPDATE",
-#         "payload": {
-#             "phase": "PLAYING",
-#             "revealed": "C A _ _ O R R _",
-#             "all_players": [
-#                 {"id": 1, "name": "Você",  "attempts_left": 4, "score": 10, "active": True},
-#                 {"id": 2, "name": "Bruno", "attempts_left": 6, "score": 0,  "active": True},
-#                 {"id": 3, "name": "Carla", "attempts_left": 6, "score": 0,  "active": True},
-#             ]
-#         }
-#     }))
-#     render_state(state)
-#     pausa("acertou algumas letras — pontuação atualizada")
- 
-#     state.update(json.dumps({"type": "PLAYER_OUT", "payload": {"player_id": 3}}))
-#     render_state(state)
-#     pausa("Carla desconectou — aparece como [ESPECTADOR] no placar")
- 
-#     state.update(json.dumps({"type": "PLAYER_OUT", "payload": {"player_id": 1}}))
-#     render_state(state)
-#     pausa("você foi eliminado — tela mostra modo espectador")
- 
-#     render_game_over(
-#         winner_name="Bruno",
-#         word="CACHORRO",
-#         scores=[
-#             {"name": "Bruno", "score": 40},
-#             {"name": "Você",  "score": 10},
-#             {"name": "Carla", "score": 0},
-#         ]
-#     )
-#     print("\n  Fim da demonstração.")
