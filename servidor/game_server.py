@@ -27,8 +27,9 @@ def _broadcast_state() -> None:
     game_state.broadcast("STATE_UPDATE", game_state.get_state_payload())
 
 
-def _broadcast_game_over() -> None:
-    winner = game_state.determine_winner()
+def _broadcast_game_over(winner: dict | None = None) -> None:
+    if winner is None:
+        winner = game_state.determine_winner()
     payload = {
         "winner_id":   winner["id"]   if winner else None,
         "winner_name": winner["name"] if winner else None,
@@ -168,14 +169,21 @@ def handle_client(conn: socket.socket, addr, player_id: int) -> None:
     finally:
         print(f"[-] Jogador {player_id} desconectado")
 
+        with game_state.lock:
+            was_registered = player_id in game_state.players
+
         #remove_player marca o jogador como espectador e verifica se
         #sobrou apenas 1 ativo — nesse caso retorna trigger_game_over.
         result = game_state.remove_player(player_id)
-        game_state.broadcast("PLAYER_OUT", {"player_id": player_id})
+        if was_registered:
+            game_state.broadcast("PLAYER_OUT", {"player_id": player_id})
 
         if result and result.get("trigger_game_over"):
             print(f"[GAME] Jogador {result['winner_name']} venceu por W.O.")
-            _broadcast_game_over()
+            _broadcast_game_over({
+                "id": result["winner_id"],
+                "name": result["winner_name"],
+            })
 
         try:
             conn.close()

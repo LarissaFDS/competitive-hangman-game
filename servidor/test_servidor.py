@@ -403,6 +403,7 @@ def test_srv_desconexao_abrupta_nao_trava():
 
     _wait_for(c1, "STATE_UPDATE", timeout=3.0)
     _wait_for(c2, "STATE_UPDATE", timeout=3.0)
+    gs.players[2].score = 99
 
     c2.close(); s2.close()
 
@@ -411,6 +412,10 @@ def test_srv_desconexao_abrupta_nao_trava():
 
     assert "PLAYER_OUT" in tipos1 or "GAME_OVER" in tipos1, \
         f"c1 deveria ter recebido PLAYER_OUT ou GAME_OVER: {tipos1}"
+    game_over = next((m for m in msgs1 if m["type"] == "GAME_OVER"), None)
+    assert game_over is not None, f"c1 deveria ter recebido GAME_OVER: {tipos1}"
+    assert game_over["payload"]["winner_name"] == "Ana", \
+        f"Vencedor por sobrevivência deveria ser Ana: {game_over}"
 
     c1.close()
     print("[OK] game_server — Desconexão abrupta não trava; demais recebem PLAYER_OUT/GAME_OVER")

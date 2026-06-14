@@ -7,7 +7,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from servidor.game_state import GameState
+from servidor.game_state import ENDED, PLAYING, GameState
 
 
 class GameStateTest(unittest.TestCase):
@@ -77,6 +77,34 @@ class GameStateTest(unittest.TestCase):
         self.assertEqual(1, len(first_sock.sent))
         self.assertEqual(1, len(second_sock.sent))
         self.assertNotIn(2, state.sockets)
+
+    def test_remove_player_marks_spectator_while_playing(self):
+        state = GameState("CASA")
+        state.phase = PLAYING
+        state.add_player(1, "Ana")
+        state.add_player(2, "Bia")
+        state.add_player(3, "Caio")
+
+        result = state.remove_player(2)
+
+        self.assertIsNone(result)
+        self.assertTrue(state.players[2].is_spectator)
+        self.assertEqual(PLAYING, state.phase)
+
+    def test_remove_player_returns_survivor_when_one_active_remains(self):
+        state = GameState("CASA")
+        state.phase = PLAYING
+        state.add_player(1, "Ana")
+        state.add_player(2, "Bia")
+        state.players[2].score = 99
+
+        result = state.remove_player(2)
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result["trigger_game_over"])
+        self.assertEqual(1, result["winner_id"])
+        self.assertEqual("Ana", result["winner_name"])
+        self.assertEqual(ENDED, state.phase)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 import threading
 import sys
@@ -16,7 +17,12 @@ from interface.renderer import render_state, render_waiting, render_game_over
 HOST = "localhost" #Interface de loopback (127.0.0.1).
 PORT = 5000        #Porta de destino na camada de transporte.
 
-def recv_loop(sock, state):
+def _encerrar_processo(codigo=0):
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(codigo)
+
+def recv_loop(sock, state, exit_process=True):
     #comportamento full-duplex da aplicação (envia e recebe simultaneamente).
     #Buffer acumulador de fragmentos TCP — mesma abordagem usada no servidor.
     #recv_msgs() acumula chunks parciais e só retorna mensagens quando o delimitador '\n' é encontrado,
@@ -62,14 +68,19 @@ def recv_loop(sock, state):
 
                 print("> ", end="", flush=True)
 
-    except ConnectionResetError:
+    except (ConnectionResetError, ConnectionAbortedError, OSError):
         #captura o recebimento de um pacote TCP RST (reset).
-        print("\nAviso: o servidor foi desconectado inesperadamente (TCP RST recebido).")
+        print("\nAviso: conexão com o servidor perdida. Encerrando o cliente.")
     except Exception as e:
         print(f"\nErro inesperado no cliente: {e}")
     finally:
         print("Encerrando o processo...")
-        sys.exit(0)
+        try:
+            sock.close()
+        except OSError:
+            pass
+        if exit_process:
+            _encerrar_processo(0)
 
 def main():
     player_name = input("Digite seu nome de jogador: ")
@@ -112,7 +123,11 @@ def main():
             else:
                 msg_type = "GUESS_WORD"
             #envia para o servidor.
-            send_msg(client_socket, msg_type, user_input.upper())
+            try:
+                send_msg(client_socket, msg_type, user_input.upper())
+            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, OSError):
+                print("\nAviso: conexão com o servidor perdida. Encerrando o cliente.")
+                break
     except KeyboardInterrupt:
         print("\nSaindo do jogo...")
     finally:
