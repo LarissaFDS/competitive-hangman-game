@@ -1,5 +1,3 @@
-"""Thread-safe match state for the multiplayer hangman server."""
-
 from __future__ import annotations
 
 import socket
@@ -28,9 +26,10 @@ class PlayerData:
 
 
 class GameState:
-    def __init__(self, word: str = "") -> None:
+    def __init__(self, word: str = "", category: str = "") -> None:
         self.phase = WAITING
         self.word = self._normalize_word(word)
+        self.category = category
         self.revealed = ["_" if char.isalpha() else char for char in self.word]
         self.guessed_letters: set[str] = set()
         self.players: dict[int, PlayerData] = {}
@@ -54,12 +53,57 @@ class GameState:
 
             return player
 
-    def remove_player(self, player_id: int) -> None:
+    def remove_player(self, player_id: int) -> dict[str, Any] | None:
         with self.lock:
             self.sockets.pop(player_id, None)
             player = self.players.get(player_id)
             if player is not None:
                 player.is_spectator = True
+
+            if self.phase != PLAYING:
+                return None
+
+            active = [p for p in self.players.values() if not p.is_spectator]
+            if len(active) == 1:
+                winner = active[0]
+                self.phase = ENDED
+                return {
+                    "trigger_game_over": True,
+                    "winner_id": winner.player_id,
+                    "winner_name": winner.name,
+                }
+
+            return None
+
+    def start_game(self, word: str, category: str, reset_scores: bool = True) -> None:
+        with self.lock:
+            self.phase = PLAYING
+            self.word = self._normalize_word(word)
+            self.category = category
+            self.revealed = ["_" if char.isalpha() else char for char in self.word]
+            self.guessed_letters = set()
+            for player in self.players.values():
+                if reset_scores:
+                    player.score = 0
+                    player.is_spectator = False
+
+                if not player.is_spectator:
+                    player.attempts = DEFAULT_ATTEMPTS
+
+                player.correct_unique_letters = set()
+
+    def reset(self) -> None:
+        with self.lock:
+            self.phase = WAITING
+            self.word = ""
+            self.category = ""
+            self.revealed = []
+            self.guessed_letters = set()
+            for player in self.players.values():
+                player.score = 0
+                player.attempts = DEFAULT_ATTEMPTS
+                player.is_spectator = False
+                player.correct_unique_letters = set()
 
     def process_guess(self, player_id: int, letter: str) -> dict[str, Any]:
         with self.lock:
@@ -154,6 +198,45 @@ class GameState:
                     if self.sockets.get(player_id) is snapshot_by_player.get(player_id):
                         self.sockets.pop(player_id, None)
 
+    def get_state_payload(self) -> dict[str, Any]:
+        with self.lock:
+            return {
+                "phase": self.phase,
+                "revealed": " ".join(self.revealed),
+                "all_players": [
+                    {
+                        "id": p.player_id,
+                        "name": p.name,
+                        "attempts_left": p.attempts,
+                        "score": p.score,
+                        "active": not p.is_spectator,
+                    }
+                    for p in self.players.values()
+                ],
+            }
+
+    def get_final_scores(self) -> list[dict[str, Any]]:
+        with self.lock:
+            return sorted(
+                [
+                    {
+                        "id": p.player_id,
+                        "name": p.name,
+                        "score": p.score,
+                        "unique_letters": len(p.correct_unique_letters),
+                    }
+                    for p in self.players.values()
+                ],
+                key=lambda x: (x["score"], x["unique_letters"]),
+                reverse=True,
+            )
+
+    def determine_winner(self) -> dict[str, Any] | None:
+        scores = self.get_final_scores()
+        if not scores:
+            return None
+        return scores[0]
+
     def _decrement_attempt(self, player: PlayerData) -> None:
         player.attempts = max(0, player.attempts - 1)
         if player.attempts == 0:
@@ -182,7 +265,6 @@ class GameState:
     def _normalize_letter(self, letter: str) -> str | None:
         if not isinstance(letter, str):
             return None
-
         normalized = self._remove_accents(letter.strip()).upper()
         if len(normalized) != 1 or not normalized.isalpha():
             return None
@@ -191,7 +273,6 @@ class GameState:
     def _normalize_word_guess(self, word: str) -> str | None:
         if not isinstance(word, str):
             return None
-
         normalized = self._normalize_word(word.strip())
         if not normalized or not normalized.replace(" ", "").isalpha():
             return None
