@@ -57,8 +57,10 @@ class GameState:
         with self.lock:
             self.sockets.pop(player_id, None)
             player = self.players.get(player_id)
-            if player is not None:
-                player.is_spectator = True
+            if player is None:
+                return None
+
+            player.is_spectator = True
 
             if self.phase != PLAYING:
                 return None
@@ -75,7 +77,13 @@ class GameState:
 
             return None
 
-    def start_game(self, word: str, category: str, reset_scores: bool = True) -> None:
+    def start_game(
+        self,
+        word: str,
+        category: str,
+        reset_scores: bool = True,
+        active_player_ids: set[int] | None = None,
+    ) -> None:
         with self.lock:
             self.phase = PLAYING
             self.word = self._normalize_word(word)
@@ -85,7 +93,10 @@ class GameState:
             for player in self.players.values():
                 if reset_scores:
                     player.score = 0
-                    player.is_spectator = False
+                    player.is_spectator = (
+                        active_player_ids is not None
+                        and player.player_id not in active_player_ids
+                    )
 
                 if not player.is_spectator:
                     player.attempts = DEFAULT_ATTEMPTS
@@ -104,6 +115,26 @@ class GameState:
                 player.attempts = DEFAULT_ATTEMPTS
                 player.is_spectator = False
                 player.correct_unique_letters = set()
+
+    def mark_ended(self) -> None:
+        with self.lock:
+            self.phase = ENDED
+
+    def current_phase(self) -> str:
+        with self.lock:
+            return self.phase
+
+    def connected_count(self) -> int:
+        with self.lock:
+            return len(self.sockets)
+
+    def connected_player_ids(self) -> set[int]:
+        with self.lock:
+            return set(self.sockets)
+
+    def active_player_ids(self) -> set[int]:
+        with self.lock:
+            return {p.player_id for p in self.players.values() if not p.is_spectator}
 
     def process_guess(self, player_id: int, letter: str) -> dict[str, Any]:
         with self.lock:
@@ -198,9 +229,9 @@ class GameState:
                     if self.sockets.get(player_id) is snapshot_by_player.get(player_id):
                         self.sockets.pop(player_id, None)
 
-    def get_state_payload(self) -> dict[str, Any]:
+    def get_state_payload(self, status_message: str | None = None) -> dict[str, Any]:
         with self.lock:
-            return {
+            payload = {
                 "phase": self.phase,
                 "revealed": " ".join(self.revealed),
                 "all_players": [
@@ -214,6 +245,13 @@ class GameState:
                     for p in self.players.values()
                 ],
             }
+            if status_message:
+                payload["status_message"] = status_message
+            return payload
+
+    def current_word(self) -> str:
+        with self.lock:
+            return self.word
 
     def get_final_scores(self) -> list[dict[str, Any]]:
         with self.lock:

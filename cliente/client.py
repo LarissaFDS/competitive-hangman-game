@@ -30,7 +30,7 @@ def recv_loop(sock, state):
             messages = recv_msgs(sock, recv_buffer)
 
             if not messages:
-                print("\nConexão encerrada pelo servidor (TCP FIN recebido).")
+                print("\nConexão encerrada pelo servidor.")
                 break
 
             for msg in messages:
@@ -49,7 +49,7 @@ def recv_loop(sock, state):
                     payload = msg.get("payload", {})
                     render_waiting(
                         payload.get("connected", 0),
-                        payload.get("needed", 3),
+                        payload.get("needed", 2),
                     )
 
                 elif msg_type == "GAME_OVER":
@@ -62,13 +62,14 @@ def recv_loop(sock, state):
 
                 print("> ", end="", flush=True)
 
-    except ConnectionResetError:
+    except (ConnectionResetError, OSError):
         #captura o recebimento de um pacote TCP RST (reset).
-        print("\nAviso: o servidor foi desconectado inesperadamente (TCP RST recebido).")
+        print("\nAviso: o servidor foi desconectado inesperadamente.")
     except Exception as e:
         print(f"\nErro inesperado no cliente: {e}")
     finally:
-        print("Encerrando o processo...")
+        state.connection_closed = True
+        print("Encerrando conexão...")
         sys.exit(0)
 
 def main():
@@ -86,7 +87,12 @@ def main():
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.
-    send_msg(client_socket, "JOIN", player_name)
+    try:
+        send_msg(client_socket, "JOIN", player_name)
+    except OSError:
+        print("Não foi possível enviar JOIN. A conexão foi encerrada.")
+        client_socket.close()
+        return
     #cria uma thread separada para lidar com a recepção bloqueante do socket
     recv_thread = threading.Thread(target=recv_loop, args=(client_socket, state), daemon=True)
     recv_thread.start()
@@ -94,7 +100,18 @@ def main():
     #Loop principal (thread principal) focado apenas em I/O do usuário e envio (upload)
     try:
         while True:
+            if state.connection_closed:
+                break
+
             user_input = input("> ").strip()
+
+            if state.phase == "ENDED":
+                if not user_input:
+                    send_msg(client_socket, "READY", {"player_id": state.my_id})
+                    print("Confirmação enviada. Aguardando outro jogador...")
+                else:
+                    print("Pressione ENTER para jogar novamente.")
+                continue
 
             if state.is_spectator:
                 print("[Você é espectador]")
@@ -115,6 +132,8 @@ def main():
             send_msg(client_socket, msg_type, user_input.upper())
     except KeyboardInterrupt:
         print("\nSaindo do jogo...")
+    except (ConnectionResetError, BrokenPipeError, OSError):
+        print("\nConexão com o servidor encerrada.")
     finally:
         client_socket.close()
 

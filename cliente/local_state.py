@@ -9,6 +9,8 @@ class LocalGameState:
         self.my_attempts = []
         self.all_players = [] #Lista de dicionários com nome, tentativas restantes e pontuação
         self.is_spectator = False
+        self.status_message = ""
+        self.connection_closed = False
 
     def update(self, msg):
         #Atualiza o estado local do jogo com base na mensagem recebida.
@@ -25,6 +27,7 @@ class LocalGameState:
             #Dispatcher: mapeia o tipo de mensagem para o método privado correspondente
             dispatch_map = {
                 "GAME_START": self._on_game_start,
+                "GAME_OVER": self._on_game_over,
                 "STATE_UPDATE": self._on_state_update,
                 "WRONG_GUESS": self._on_wrong_guess,
                 "PLAYER_OUT": self._on_player_out,
@@ -46,13 +49,27 @@ class LocalGameState:
         self.my_id = payload.get("your_id", self.my_id)
         self.phase = "PLAYING"
         self.my_attempts = []    
-        self.is_spectator = False
         self.category = payload.get("category", self.category)
+        self.status_message = ""
+
+        active_player_ids = payload.get("active_player_ids")
+        if active_player_ids:
+            self.is_spectator = self.my_id not in active_player_ids
+
+    def _on_game_over(self, payload):
+        self.phase = "ENDED"
+        self.status_message = ""
 
     def _on_state_update(self, payload):
         self.phase = payload.get("phase", self.phase)
         self.revealed = payload.get("revealed", self.revealed)
         self.all_players = payload.get("all_players", self.all_players)
+        self.status_message = payload.get("status_message", "")
+
+        for player in self.all_players:
+            if player.get("id") == self.my_id:
+                self.is_spectator = not player.get("active", True)
+                break
 
     def _on_wrong_guess(self, payload):
         #Atualiza my_attempts apenas se o erro foi do próprio jogador
