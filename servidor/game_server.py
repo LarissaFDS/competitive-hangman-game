@@ -1,6 +1,7 @@
 import socket
 import sys
 import threading
+import argparse # <--- ADICIONE ESTE IMPORT
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -8,11 +9,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.protocol import recv_msgs, send_msg
-from servidor.game_state import ENDED, PLAYING, GameState
+from servidor.game_state import GameState
 from servidor.word_manager import load_words, pick_word
-import time
-HOST = "localhost"
-PORT = 5000
+
+
+parser = argparse.ArgumentParser(description="Inicia o servidor do jogo da forca.")
+parser.add_argument("--host", type=str, default="0.0.0.0", help="IP para escutar (0.0.0.0 para LAN)")
+parser.add_argument("--port", type=int, default=5000, help="Porta do servidor")
+args = parser.parse_args()
+
+HOST = args.host
+PORT = args.port
+
+
 MIN_PLAYERS = 2
 MAX_CLIENTS = 3
 WORD_SOLVED_DELAY_SECONDS = 2
@@ -302,12 +311,29 @@ def accept_loop(server_sock: socket.socket) -> None:
         )
         client_thread.start()
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Servidor do jogo da forca competitivo.")
+    parser.add_argument(
+        "--host",
+        default=HOST,
+        help="Interface para escutar conexões. Use 0.0.0.0 para LAN.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=PORT,
+        help="Porta TCP do servidor.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_sock.bind((HOST, PORT))
+    server_sock.bind((args.host, args.port))
     server_sock.listen()
-    print(f"Servidor escutando em {HOST}:{PORT}")
+    print(f"Servidor escutando em {args.host}:{args.port}")
 
     try:
         accept_loop(server_sock)

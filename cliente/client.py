@@ -2,6 +2,7 @@ import json
 import socket
 import threading
 import sys
+import argparse 
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -11,10 +12,30 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.protocol import send_msg, recv_msgs
 from local_state import LocalGameState
 from interface.renderer import render_state, render_waiting, render_game_over
+parser = argparse.ArgumentParser(description="Inicia o cliente do jogo da forca.")
+parser.add_argument("--host", type=str, default="localhost", help="IP do servidor para conectar")
+parser.add_argument("--port", type=int, default=5000, help="Porta de destino")
+args = parser.parse_args()
 
-#Configurações camada de transporte e rede
-HOST = "localhost" #Interface de loopback (127.0.0.1).
-PORT = 5000        #Porta de destino na camada de transporte.
+HOST = args.host
+PORT = args.port
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Cliente do jogo da forca competitivo.")
+    parser.add_argument(
+        "host",
+        nargs="?",
+        default=HOST,
+        help="IP ou hostname do servidor. Ex: 192.168.1.10",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=PORT,
+        help="Porta TCP do servidor.",
+    )
+    return parser.parse_args()
 
 def recv_loop(sock, state):
     #comportamento full-duplex da aplicação (envia e recebe simultaneamente).
@@ -73,6 +94,7 @@ def recv_loop(sock, state):
         sys.exit(0)
 
 def main():
+    args = parse_args()
     player_name = input("Digite seu nome de jogador: ")
     state = LocalGameState()
     #criação do socket:
@@ -81,9 +103,9 @@ def main():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         #onicia o "3-way handshake" do TCP (SYN, SYN-ACK, ACK) com o servidor.
-        client_socket.connect((HOST, PORT))
+        client_socket.connect((args.host, args.port))
     except ConnectionRefusedError:
-        print("Não foi possível conectar. O servidor está rodando na porta 5000?")
+        print(f"Não foi possível conectar. O servidor está rodando em {args.host}:{args.port}?")
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.

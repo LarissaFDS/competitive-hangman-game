@@ -119,35 +119,11 @@ Para permitir partidas consecutivas em formato de campeonato (onde os pontos acu
 
 Abaixo está a representação exata da visualização de um cliente no terminal durante uma partida ativa:
 
-```
-  +------+
-  |      |
-  |      O
-  |     /|\
-  |     /
-  |
-============
-
-── PLACAR ──────────────────────────
-  Carlos ◄ você
-    Pontos: 3  |  Tentativas: 4
-  Mariana
-    Pontos: 5  |  Tentativas: 6
-  João [ESPECTADOR]
-    Pontos: 1  |  Tentativas: 0
-────────────────────────────────────
-
-  Categoria: FRUTA
-  Palavra: B A N A _ _
-
-  Letras erradas: X  M
-
-> _
-```
+![alt text](image.png)
 
 ---
 
-## 🚀 Como rodar o jogo
+## 🚀 Como rodar o jogo 
 
 Certifique-se de possuir o **Python 3.8 ou superior** instalado em sua máquina. Não são necessárias dependências externas (o projeto utiliza bibliotecas nativas da linguagem).
 
@@ -181,12 +157,65 @@ python servidor/game_server.py
 python cliente/client.py
 ```
 
+### Rodar o jogo via LAN (LOCAL AREA NETWORK) 🛜
+
+Para jogar em uma rede local, siga os passos abaixo:
+
+1. Todos os computadores devem estar na mesma rede Wi-Fi/cabeada.
+2. Na máquina que será o servidor, descubra o IP local:
+
+```bash
+# Linux / macOS
+hostname -I
+```
+
+```dos
+:: Windows
+ipconfig
+```
+
+Procure um endereço parecido com `192.168.x.x` ou `10.x.x.x`.
+
+3. Inicie o servidor escutando na rede:
+
+```bash
+python3 servidor/game_server.py --host 0.0.0.0 --port 5000
+```
+
+No Windows:
+
+```dos
+python servidor/game_server.py --host 0.0.0.0 --port 5000
+```
+
+4. Em cada computador cliente, execute apontando para o IP da máquina servidora:
+
+```bash
+python3 cliente/client.py 192.168.1.10 --port 5000
+```
+
+No Windows:
+
+```dos
+python cliente/client.py 192.168.1.10 --port 5000
+```
+
+Substitua `192.168.1.10` pelo IP local real do servidor.
+
+5. Se os clientes não conectarem, verifique:
+
+- O firewall da máquina servidora precisa liberar a porta TCP `5000`.
+- O servidor deve continuar aberto enquanto os clientes jogam.
+- Se o servidor estiver rodando dentro do WSL, talvez a LAN não consiga acessar diretamente o IP do Linux virtualizado. Nesse caso, prefira rodar o servidor no Python do Windows ou configure encaminhamento de porta do Windows para o WSL.
+- Todos os jogadores devem usar a mesma porta configurada no servidor.
+
 ---
 
-## 👥 Equipe e responsabilidades
+## 👥 Equipe 
 
-| Integrante | Responsabilidade Principal | Escopo Técnico |
-|---|---|---|
-| Integrante 1 | Engenharia de Redes & Concorrência | Arquitetura multi-thread do servidor, gerenciamento de Socket TCP (`accept_loop`), manipulação de travamento atômico de dados (`threading.Lock`) e controle do ciclo de vida das conexões. |
-| Integrante 2 | Gerenciamento de Estado & Protocolo | Implementação do core da lógica de estados (`game_state.py` e `local_state.py`), normalização UTF-8/Unicode (remoção de acentos), parser do banco de palavras e serialização do protocolo estruturado em JSON. |
-| Integrante 3 | Interface de Usuário & UX Textual | Desenvolvimento do motor de renderização dinâmico em terminal (`renderer.py`), formatação de tabelas, controle dos estágios visuais da forca e tratamento do loop de input e eventos assíncronos de rede no cliente. |
+Larissa Ferreira 
+Otávio Menezes
+Davi Celestino
+João Victor
+Renato Coca
+---
