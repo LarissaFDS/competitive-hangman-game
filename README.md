@@ -237,9 +237,9 @@ No Radmin VPN, troque `192.168.1.10` pelo IP do Radmin da máquina servidora.
 
 ## 👥 Equipe 
 
-Larissa Ferreira 
-Otávio Menezes
-Davi Celestino
-João Victor
-Renato Coca
+* Larissa Ferreira 
+* Otávio Menezes
+* Davi Celestino
+* João Victor
+* Renato Coca
 ---
