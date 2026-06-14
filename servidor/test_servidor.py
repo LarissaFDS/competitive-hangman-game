@@ -17,11 +17,6 @@ import game_server as srv
 
 srv.WORDS_PATH = ROOT.parent / "assets" / "palavras.txt"
 
-
-# ===========================================================================
-# HELPERS
-# ===========================================================================
-
 def _make_game(word: str = "GATO") -> GameState:
     gs = GameState()
     gs.phase = PLAYING
@@ -31,7 +26,6 @@ def _make_game(word: str = "GATO") -> GameState:
 
 
 def _read_all(sock: socket.socket) -> list[dict]:
-    """Lê tudo disponível no socket de forma não-bloqueante."""
     msgs = []
     sock.setblocking(False)
     buf = b""
@@ -58,10 +52,6 @@ def _read_all(sock: socket.socket) -> list[dict]:
 
 
 def _wait_for(sock: socket.socket, msg_type: str, timeout: float = 3.0) -> list[dict]:
-    """
-    Aguarda até `timeout` segundos por uma mensagem do tipo especificado.
-    Retorna todas as mensagens recebidas até então.
-    """
     deadline = time.time() + timeout
     all_msgs = []
     buf = b""
@@ -78,10 +68,9 @@ def _wait_for(sock: socket.socket, msg_type: str, timeout: float = 3.0) -> list[
             except OSError:
                 break
 
-            # Processa linhas completas acumuladas
             decoded = buf.decode("utf-8", errors="replace")
             lines = decoded.split("\n")
-            buf = lines.pop().encode("utf-8")  # guarda fragmento incompleto
+            buf = lines.pop().encode("utf-8") 
             for line in lines:
                 line = line.strip()
                 if not line:
@@ -90,7 +79,6 @@ def _wait_for(sock: socket.socket, msg_type: str, timeout: float = 3.0) -> list[
                     msg = json.loads(line)
                     all_msgs.append(msg)
                     if msg.get("type") == msg_type:
-                        # Drena o restante não-bloqueante antes de retornar
                         all_msgs.extend(_read_all(sock))
                         return all_msgs
                 except json.JSONDecodeError:
@@ -101,7 +89,6 @@ def _wait_for(sock: socket.socket, msg_type: str, timeout: float = 3.0) -> list[
 
 
 def _setup_server():
-    """Injeta um GameState isolado no game_server e retorna (gs, spawn_fn)."""
     gs = GameState()
     srv.game_state = gs
 
@@ -118,17 +105,11 @@ def _setup_server():
 
 
 def _join_two(spawn, c1, c2) -> None:
-    """Conecta dois jogadores e aguarda a partida iniciar."""
     spawn(c1[0], 1)
     send_msg(c1[1], "JOIN", "Ana")
     time.sleep(0.15)
     spawn(c2[0], 2)
     send_msg(c2[1], "JOIN", "Bruno")
-
-
-# ===========================================================================
-# BLOCO 1 — game_state.py
-# ===========================================================================
 
 def test_gs_concorrencia_letra_repetida():
     falhas = []
@@ -329,13 +310,11 @@ def test_srv_dois_jogadores_iniciam_partida():
 
     spawn(s1, 1)
     send_msg(c1, "JOIN", "Ana")
-    # Aguarda GAME_START do jogador 1 antes de conectar o 2
     _wait_for(c1, "GAME_START", timeout=2.0)
 
     spawn(s2, 2)
     send_msg(c2, "JOIN", "Bruno")
 
-    # Ambos devem receber STATE_UPDATE quando a partida iniciar
     msgs1 = _wait_for(c1, "STATE_UPDATE", timeout=3.0)
     msgs2 = _wait_for(c2, "STATE_UPDATE", timeout=3.0)
     tipos1 = [m["type"] for m in msgs1]
@@ -425,7 +404,6 @@ def test_srv_desconexao_abrupta_nao_trava():
     _wait_for(c1, "STATE_UPDATE", timeout=3.0)
     _wait_for(c2, "STATE_UPDATE", timeout=3.0)
 
-    # Fecha abruptamente o cliente 2
     c2.close(); s2.close()
 
     msgs1 = _wait_for(c1, "GAME_OVER", timeout=3.0)
@@ -463,11 +441,6 @@ def test_srv_game_over_reseta_para_nova_partida():
 
     c1.close(); c2.close()
     print("[OK] game_server — Após GAME_OVER, estado reseta e envia WAITING para nova partida")
-
-
-# ===========================================================================
-# Runner
-# ===========================================================================
 
 if __name__ == "__main__":
     print("=" * 60)
