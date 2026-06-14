@@ -28,8 +28,32 @@ def _broadcast_state() -> None:
     game_state.broadcast("STATE_UPDATE", game_state.get_state_payload())
 
 
+def _pop_next_word() -> tuple[str, str] | None:
+    if not available_words:
+        return None
+
+    word_tuple = pick_word(available_words)
+    available_words.remove(word_tuple)
+    return word_tuple
+
+
+def _start_next_round(reset_scores: bool) -> bool:
+    word_tuple = _pop_next_word()
+    if word_tuple is None:
+        return False
+
+    word, category = word_tuple
+    game_state.start_game(word, category, reset_scores=reset_scores)
+    game_state.broadcast("GAME_START", {
+        "category":    category,
+        "word_length": len(word),
+    })
+    _broadcast_state()
+    print(f"[GAME] Round iniciado! Palavra: {word} ({category})")
+    return True
+
+
 def _broadcast_game_over() -> None:
-    import random
     import time
 
     winner = game_state.determine_winner()
@@ -43,31 +67,19 @@ def _broadcast_game_over() -> None:
 
     time.sleep(6)
 
-    connected_count = len(game_state.sockets)
-    words_ran_out = len(available_words) == 0
-    all_spectators = all(p.is_spectator for p in game_state.players.values())
+    game_state.reset()
+    game_state.broadcast("WAITING", {
+        "connected": len(game_state.sockets),
+        "needed": MIN_PLAYERS,
+    })
 
-    if connected_count <= 1 or words_ran_out or all_spectators:
-        print(f"[RESET] Condição atingida. Conectados: {connected_count}, sem palavras: {words_ran_out}, todos espectadores: {all_spectators}")
-        
-        game_state.reset()
-        game_state.broadcast("WAITING", {
-            "connected": len(game_state.sockets), 
-            "needed": MIN_PLAYERS
-        })
-    else:
-        word_tuple = random.choice(available_words)
-        available_words.remove(word_tuple)
-        word, category = word_tuple
 
-        game_state.start_game(word, category, reset_scores=False)
+def _handle_word_solved() -> None:
+    if _start_next_round(reset_scores=False):
+        return
 
-        game_state.broadcast("GAME_START", {
-            "category":    category,
-            "word_length": len(word),
-        })
-        _broadcast_state()
-        print(f"[GAME] Próximo round iniciado! Palavra: {word} ({category})")
+    print("[GAME] Banco de palavras esgotado.")
+    _broadcast_game_over()
 
 def _handle_guess(player_id: int, letter: str) -> None:
     result = game_state.process_guess(player_id, letter)
@@ -93,7 +105,7 @@ def _handle_guess(player_id: int, letter: str) -> None:
 
     #Alguém acertou a palavra.
     if result["won"]:
-        _broadcast_game_over()
+        _handle_word_solved()
         return
 
     #Todos viraram espectadores (sem vencedor por acerto).
@@ -117,7 +129,7 @@ def _handle_word_guess(player_id: int, word: str) -> None:
             "word":      word.upper(),
             "positions": result["positions"],
         })
-        _broadcast_game_over()
+        _handle_word_solved()
         return
 
     game_state.broadcast("WRONG_GUESS", {
@@ -137,6 +149,8 @@ def _handle_word_guess(player_id: int, word: str) -> None:
 
 def handle_client(conn: socket.socket, addr, player_id: int) -> None:
     """Atende um cliente em thread dedicada."""
+    global available_words
+
     recv_buffer = [""]
 
     try:
@@ -155,30 +169,30 @@ def handle_client(conn: socket.socket, addr, player_id: int) -> None:
 
                     print(f"[JOIN] Jogador {player_id} ({player_name}) entrou")
 
+                    connected = len(game_state.players)
                     send_msg(conn, "GAME_START", {
-                        "your_id": player_id,
-                        "player_count": len(game_state.players),
+                        "your_id":      player_id,
+                        "player_count": connected,
+                        "category":     game_state.category,
+                        "word_length":  len(game_state.word),
                     })
 
-                    #Mantém todos atualizados sobre quantos já estão na sala.
-                    connected = len(game_state.players)
-                    game_state.broadcast("WAITING", {
-                        "connected": connected,
-                        "needed":    MIN_PLAYERS,
-                    })
+                    if game_state.phase == "PLAYING":
+                        _broadcast_state()
+                        continue
+
+                    #Mantém a sala em espera somente antes de a partida começar.
+                    if connected < MIN_PLAYERS:
+                        game_state.broadcast("WAITING", {
+                            "connected": connected,
+                            "needed":    MIN_PLAYERS,
+                        })
+                        continue
 
                     #Segundo jogador conectado — inicia a partida.
-                    if connected >= MIN_PLAYERS and game_state.phase == "WAITING":
-                        words   = load_words(WORDS_PATH)
-                        word, category = pick_word(words)
-                        game_state.start_game(word, category)
-
-                        game_state.broadcast("GAME_START", {
-                            "category":    category,
-                            "word_length": len(word),
-                        })
-                        _broadcast_state()
-                        print(f"[GAME] Partida iniciada! Palavra: {word} ({category})")
+                    available_words = load_words(WORDS_PATH)
+                    if not _start_next_round(reset_scores=True):
+                        send_msg(conn, "ERROR", {"message": "Banco de palavras vazio."})
 
                 elif msg_type == "GUESS_LETTER" and game_state.phase == "PLAYING":
                     letter = payload if isinstance(payload, str) else ""

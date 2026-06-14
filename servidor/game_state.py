@@ -83,10 +83,13 @@ class GameState:
             self.revealed = ["_" if char.isalpha() else char for char in self.word]
             self.guessed_letters = set()
             for player in self.players.values():
-                player.attempts = DEFAULT_ATTEMPTS
                 if reset_scores:
                     player.score = 0
-                player.is_spectator = False
+                    player.is_spectator = False
+
+                if not player.is_spectator:
+                    player.attempts = DEFAULT_ATTEMPTS
+
                 player.correct_unique_letters = set()
 
     def reset(self) -> None:
