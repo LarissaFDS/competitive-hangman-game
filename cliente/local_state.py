@@ -26,6 +26,7 @@ class LocalGameState:
 
             #Dispatcher: mapeia o tipo de mensagem para o método privado correspondente
             dispatch_map = {
+                "WELCOME": self._on_welcome,
                 "GAME_START": self._on_game_start,
                 "GAME_OVER": self._on_game_over,
                 "STATE_UPDATE": self._on_state_update,
@@ -45,8 +46,10 @@ class LocalGameState:
             print(f"\nErro ao processar o estado local: {e}")
 
     #--- Metodos de tratamento de estado ---
-    def _on_game_start(self, payload):
+    def _on_welcome(self, payload):
         self.my_id = payload.get("your_id", self.my_id)
+
+    def _on_game_start(self, payload):
         self.phase = "PLAYING"
         self.my_attempts = []    
         self.category = payload.get("category", self.category)

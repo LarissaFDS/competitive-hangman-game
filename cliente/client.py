@@ -2,7 +2,8 @@ import json
 import socket
 import threading
 import sys
-import argparse 
+import argparse
+import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,20 +14,30 @@ from utils.protocol import send_msg, recv_msgs
 from local_state import LocalGameState
 from interface.renderer import render_state, render_waiting, render_game_over
 
+DEFAULT_HOST = os.environ.get("HANGMAN_SERVER_HOST", "localhost")
+DEFAULT_PORT = int(os.environ.get("HANGMAN_SERVER_PORT", "5000"))
+DEFAULT_TIMEOUT = float(os.environ.get("HANGMAN_CONNECT_TIMEOUT", "8"))
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Cliente do jogo da forca competitivo.")
     parser.add_argument(
         "host",
         nargs="?",
-        default="localhost",
+        default=DEFAULT_HOST,
         help="IP ou hostname do servidor. Ex: 192.168.1.10",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=5000,
+        default=DEFAULT_PORT,
         help="Porta TCP do servidor.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT,
+        help="Tempo limite, em segundos, para conectar ao servidor.",
     )
     return parser.parse_args()
 
@@ -93,12 +104,26 @@ def main():
     #criação do socket:
     #AF_INET: define a família de endereçamento como IPv4 (camada de rede).
     #SOCK_STREAM: define o uso do protocolo TCP.
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         #onicia o "3-way handshake" do TCP (SYN, SYN-ACK, ACK) com o servidor.
-        client_socket.connect((args.host, args.port))
+        client_socket = socket.create_connection(
+            (args.host, args.port),
+            timeout=args.timeout,
+        )
+        client_socket.settimeout(None)
     except ConnectionRefusedError:
         print(f"Não foi possível conectar. O servidor está rodando em {args.host}:{args.port}?")
+        return
+    except socket.timeout:
+        print(f"Tempo esgotado ao conectar em {args.host}:{args.port}.")
+        print("Confira IP, porta, firewall e se ambos estão na mesma LAN/VPN.")
+        return
+    except socket.gaierror:
+        print(f"Endereço inválido ou não resolvido: {args.host}")
+        return
+    except OSError as exc:
+        print(f"Falha ao conectar em {args.host}:{args.port}: {exc}")
+        print("Confira IP, porta, firewall e se ambos estão na mesma LAN/VPN.")
         return
 
     #construção da PDU (protocol data unit) da camada de aplicação.

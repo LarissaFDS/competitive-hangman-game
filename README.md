@@ -159,7 +159,9 @@ python cliente/client.py
 
 ### Rodar o jogo via LAN (LOCAL AREA NETWORK) 🛜
 
-Para jogar em uma rede local, siga os passos abaixo:
+Para jogar em computadores diferentes, rode **um servidor** e faça todos os clientes apontarem para o **IP da máquina servidora**.
+
+> Importante: `0.0.0.0` é usado somente no servidor. No cliente, use sempre o IP real do servidor, por exemplo `192.168.1.10` na rede de casa ou o IP do Radmin VPN.
 
 1. Todos os computadores devem estar na mesma rede Wi-Fi/cabeada.
 2. Na máquina que será o servidor, descubra o IP local:
@@ -176,7 +178,9 @@ ipconfig
 
 Procure um endereço parecido com `192.168.x.x` ou `10.x.x.x`.
 
-3. Inicie o servidor escutando na rede:
+Se estiver usando **Radmin VPN**, use o IP que aparece no Radmin na máquina servidora, normalmente algo como `26.x.x.x`.
+
+3. Na máquina servidora, inicie o servidor escutando na rede:
 
 ```bash
 python3 servidor/game_server.py --host 0.0.0.0 --port 5000
@@ -188,7 +192,9 @@ No Windows:
 python servidor/game_server.py --host 0.0.0.0 --port 5000
 ```
 
-4. Em cada computador cliente, execute apontando para o IP da máquina servidora:
+Ao iniciar, o servidor também mostra alguns IPs possíveis para os clientes usarem.
+
+4. Em cada computador cliente, execute apontando para o IP real da máquina servidora:
 
 ```bash
 python3 cliente/client.py 192.168.1.10 --port 5000
@@ -200,13 +206,31 @@ No Windows:
 python cliente/client.py 192.168.1.10 --port 5000
 ```
 
-Substitua `192.168.1.10` pelo IP local real do servidor.
+Substitua `192.168.1.10` pelo IP real do servidor.
 
-5. Se os clientes não conectarem, verifique:
+#### Liberar firewall no Windows
+
+Se o servidor estiver no Windows, abra o PowerShell como Administrador e libere a porta TCP `5000`:
+
+```powershell
+New-NetFirewallRule -DisplayName "Forca TCP 5000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5000
+```
+
+Para testar se a porta está acessível a partir de outro PC Windows:
+
+```powershell
+Test-NetConnection 192.168.1.10 -Port 5000
+```
+
+No Radmin VPN, troque `192.168.1.10` pelo IP do Radmin da máquina servidora.
+
+#### Observações importantes
 
 - O firewall da máquina servidora precisa liberar a porta TCP `5000`.
+- No Radmin VPN, todos precisam estar na mesma rede virtual e online no Radmin.
 - O servidor deve continuar aberto enquanto os clientes jogam.
-- Se o servidor estiver rodando dentro do WSL, talvez a LAN não consiga acessar diretamente o IP do Linux virtualizado. Nesse caso, prefira rodar o servidor no Python do Windows ou configure encaminhamento de porta do Windows para o WSL.
+- Se o servidor estiver rodando no Windows com WSL, prefira executar o servidor usando o Python do Windows, não dentro do WSL. O WSL pode ficar atrás de uma rede virtual e impedir conexões vindas da LAN/Radmin sem redirecionamento de porta.
+- Nunca rode o cliente com `0.0.0.0`. Esse endereço serve apenas para o servidor escutar em todas as interfaces.
 - Todos os jogadores devem usar a mesma porta configurada no servidor.
 
 ---

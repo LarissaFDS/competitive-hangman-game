@@ -2,6 +2,7 @@ import socket
 import sys
 import threading
 import argparse
+import os
 from pathlib import Path
 import time  # Necessário para os delays
 
@@ -10,9 +11,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.protocol import recv_msgs, send_msg
-from servidor.game_state import GameState
+from servidor.game_state import ENDED, PLAYING, GameState
 from servidor.word_manager import load_words, pick_word
 
+DEFAULT_HOST = os.environ.get("HANGMAN_HOST", "0.0.0.0")
+DEFAULT_PORT = int(os.environ.get("HANGMAN_PORT", "5000"))
 MIN_PLAYERS = 2
 MAX_CLIENTS = 3
 WORD_SOLVED_DELAY_SECONDS = 2
@@ -212,15 +215,17 @@ def handle_client(conn: socket.socket, addr, player_id: int) -> None:
                     print(f"[JOIN] Jogador {player_id} ({player_name}) entrou")
 
                     connected = game_state.connected_count()
-                    send_msg(conn, "GAME_START", {
+                    send_msg(conn, "WELCOME", {
                         "your_id":      player_id,
                         "player_count": connected,
-                        "category":     game_state.category,
-                        "word_length":  len(game_state.word),
-                        "active_player_ids": list(game_state.active_player_ids()),
                     })
 
                     if game_state.current_phase() == PLAYING:
+                        send_msg(conn, "GAME_START", {
+                            "category":     game_state.category,
+                            "word_length":  len(game_state.word),
+                            "active_player_ids": list(game_state.active_player_ids()),
+                        })
                         _broadcast_state()
                         continue
 
@@ -302,17 +307,32 @@ def accept_loop(server_sock: socket.socket) -> None:
         )
         client_thread.start()
 
+
+def local_ipv4_addresses() -> list[str]:
+    addresses = set()
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                addresses.add(ip)
+    except OSError:
+        pass
+
+    return sorted(addresses)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Servidor do jogo da forca competitivo.")
     parser.add_argument(
         "--host",
-        default=HOST,
+        default=DEFAULT_HOST,
         help="Interface para escutar conexões. Use 0.0.0.0 para LAN.",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=PORT,
+        default=DEFAULT_PORT,
         help="Porta TCP do servidor.",
     )
     return parser.parse_args()
@@ -325,6 +345,14 @@ def main() -> None:
     server_sock.bind((args.host, args.port))
     server_sock.listen()
     print(f"Servidor escutando em {args.host}:{args.port}")
+    if args.host == "0.0.0.0":
+        ips = local_ipv4_addresses()
+        if ips:
+            print("Clientes na LAN/VPN devem conectar usando um destes IPs:")
+            for ip in ips:
+                print(f"  python3 cliente/client.py {ip} --port {args.port}")
+        else:
+            print("Use o IP local da máquina servidora no cliente, não 0.0.0.0.")
 
     try:
         accept_loop(server_sock)
