@@ -12,13 +12,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.protocol import send_msg, recv_msgs
 from local_state import LocalGameState
 from interface.renderer import render_state, render_waiting, render_game_over
-parser = argparse.ArgumentParser(description="Inicia o cliente do jogo da forca.")
-parser.add_argument("--host", type=str, default="localhost", help="IP do servidor para conectar")
-parser.add_argument("--port", type=int, default=5000, help="Porta de destino")
-args = parser.parse_args()
-
-HOST = args.host
-PORT = args.port
 
 
 def parse_args():
@@ -26,13 +19,13 @@ def parse_args():
     parser.add_argument(
         "host",
         nargs="?",
-        default=HOST,
+        default="localhost",
         help="IP ou hostname do servidor. Ex: 192.168.1.10",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=PORT,
+        default=5000,
         help="Porta TCP do servidor.",
     )
     return parser.parse_args()

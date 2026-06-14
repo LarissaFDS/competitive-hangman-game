@@ -1,8 +1,9 @@
 import socket
 import sys
 import threading
-import argparse # <--- ADICIONE ESTE IMPORT
+import argparse
 from pathlib import Path
+import time  # Necessário para os delays
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,16 +12,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.protocol import recv_msgs, send_msg
 from servidor.game_state import GameState
 from servidor.word_manager import load_words, pick_word
-
-
-parser = argparse.ArgumentParser(description="Inicia o servidor do jogo da forca.")
-parser.add_argument("--host", type=str, default="0.0.0.0", help="IP para escutar (0.0.0.0 para LAN)")
-parser.add_argument("--port", type=int, default=5000, help="Porta do servidor")
-args = parser.parse_args()
-
-HOST = args.host
-PORT = args.port
-
 
 MIN_PLAYERS = 2
 MAX_CLIENTS = 3
